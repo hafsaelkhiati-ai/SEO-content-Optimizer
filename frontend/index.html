@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GEO Content Agent — AI-Powered SEO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="noise"></div>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-bracket">[</span>GEO<span class="logo-accent">_AGENT</span><span class="logo-bracket">]</span>
+      </div>
+      <nav class="nav">
+        <a href="#" class="nav-link active" data-page="generate">Generate</a>
+        <a href="#" class="nav-link" data-page="queue">Queue</a>
+        <a href="#" class="nav-link" data-page="settings">Settings</a>
+      </nav>
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        <span id="status-text">Agent Online</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- PAGE: GENERATE -->
+    <section class="page active" id="page-generate">
+
+      <div class="hero">
+        <div class="hero-tag">GEO-OPTIMISED CONTENT · AUTOMATED</div>
+        <h1 class="hero-title">Keyword in.<br /><em>Draft out.</em></h1>
+        <p class="hero-sub">Researches top-10 SERP · Finds gaps · Writes & publishes draft — in under 10 minutes.</p>
+      </div>
+
+      <!-- MAIN INPUT CARD -->
+      <div class="card card-main">
+        <div class="card-label">TARGET KEYWORD</div>
+        <div class="input-row">
+          <input
+            type="text"
+            id="keyword-input"
+            class="keyword-input"
+            placeholder="e.g. GEO Optimierung für KMU 2025"
+            autocomplete="off"
+          />
+          <button class="btn-run" id="run-btn" onclick="runAgent()">
+            <span class="btn-text">Run Agent</span>
+            <span class="btn-icon">→</span>
+          </button>
+        </div>
+
+        <div class="options-row">
+          <label class="toggle-label">
+            <input type="checkbox" id="opt-publish" checked />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            Auto-publish to WordPress
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="opt-notify" checked />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            Slack notification
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="opt-gsc" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            Check GSC before run
+          </label>
+        </div>
+      </div>
+
+      <!-- PIPELINE STAGES -->
+      <div class="pipeline" id="pipeline">
+        <div class="pipeline-label">PIPELINE</div>
+        <div class="stages">
+          <div class="stage" id="stage-serp">
+            <div class="stage-num">01</div>
+            <div class="stage-icon">🔍</div>
+            <div class="stage-name">SERP Research</div>
+            <div class="stage-desc">Perplexity API · Top-10 results</div>
+            <div class="stage-bar"><div class="stage-progress"></div></div>
+          </div>
+          <div class="stage-arrow">▶</div>
+          <div class="stage" id="stage-gap">
+            <div class="stage-num">02</div>
+            <div class="stage-icon">📊</div>
+            <div class="stage-name">Gap Analysis</div>
+            <div class="stage-desc">GPT-4o · Missing angles</div>
+            <div class="stage-bar"><div class="stage-progress"></div></div>
+          </div>
+          <div class="stage-arrow">▶</div>
+          <div class="stage" id="stage-outline">
+            <div class="stage-num">03</div>
+            <div class="stage-icon">📋</div>
+            <div class="stage-name">Outline</div>
+            <div class="stage-desc">H1/H2/H3 structure</div>
+            <div class="stage-bar"><div class="stage-progress"></div></div>
+          </div>
+          <div class="stage-arrow">▶</div>
+          <div class="stage" id="stage-draft">
+            <div class="stage-num">04</div>
+            <div class="stage-icon">✍️</div>
+            <div class="stage-name">Draft Writing</div>
+            <div class="stage-desc">GEO-phrasing · GPT-4o</div>
+            <div class="stage-bar"><div class="stage-progress"></div></div>
+          </div>
+          <div class="stage-arrow">▶</div>
+          <div class="stage" id="stage-publish">
+            <div class="stage-num">05</div>
+            <div class="stage-icon">🚀</div>
+            <div class="stage-name">Publish</div>
+            <div class="stage-desc">WordPress REST API</div>
+            <div class="stage-bar"><div class="stage-progress"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OUTPUT PANEL -->
+      <div class="output-panel" id="output-panel" style="display:none">
+        <div class="output-header">
+          <div class="output-title">AGENT OUTPUT</div>
+          <div class="output-meta" id="output-meta"></div>
+        </div>
+
+        <div class="output-tabs">
+          <button class="tab-btn active" onclick="showTab('outline')">Outline</button>
+          <button class="tab-btn" onclick="showTab('draft')">Draft</button>
+          <button class="tab-btn" onclick="showTab('gaps')">Gap Analysis</button>
+          <button class="tab-btn" onclick="showTab('raw')">Raw JSON</button>
+        </div>
+
+        <div class="tab-content active" id="tab-outline">
+          <div class="output-box" id="outline-content"></div>
+        </div>
+        <div class="tab-content" id="tab-draft">
+          <div class="output-box" id="draft-content"></div>
+        </div>
+        <div class="tab-content" id="tab-gaps">
+          <div class="output-box" id="gaps-content"></div>
+        </div>
+        <div class="tab-content" id="tab-raw">
+          <pre class="output-box code-box" id="raw-content"></pre>
+        </div>
+
+        <div class="output-actions">
+          <button class="btn-secondary" onclick="copyDraft()">Copy Draft</button>
+          <button class="btn-secondary" onclick="downloadDraft()">Download .md</button>
+          <a id="wp-link" class="btn-primary" href="#" target="_blank" style="display:none">View in WordPress →</a>
+        </div>
+      </div>
+
+      <!-- STATS ROW -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-val" id="stat-total">0</div>
+          <div class="stat-label">Articles Generated</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">~10 min</div>
+          <div class="stat-label">Per Keyword</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">€0.30</div>
+          <div class="stat-label">API Cost/Article</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">60%</div>
+          <div class="stat-label">Time Saved</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE: QUEUE -->
+    <section class="page" id="page-queue">
+      <div class="hero">
+        <div class="hero-tag">BATCH PROCESSING</div>
+        <h1 class="hero-title">Keyword<br /><em>Queue.</em></h1>
+      </div>
+
+      <div class="card">
+        <div class="card-label">BULK KEYWORDS — one per line</div>
+        <textarea id="bulk-keywords" class="bulk-input" placeholder="GEO Optimierung Agentur&#10;ChatGPT SEO Deutschland&#10;Perplexity Marketing B2B&#10;KI Content Marketing DACH"></textarea>
+        <div class="bulk-actions">
+          <button class="btn-run" onclick="runBulk()">
+            <span class="btn-text">Run Batch</span>
+            <span class="btn-icon">→</span>
+          </button>
+          <div class="bulk-est" id="bulk-est"></div>
+        </div>
+      </div>
+
+      <div class="queue-list" id="queue-list">
+        <div class="queue-empty">No jobs in queue. Add keywords above.</div>
+      </div>
+    </section>
+
+    <!-- PAGE: SETTINGS -->
+    <section class="page" id="page-settings">
+      <div class="hero">
+        <div class="hero-tag">CONFIGURATION</div>
+        <h1 class="hero-title">API<br /><em>Settings.</em></h1>
+      </div>
+
+      <div class="settings-grid">
+
+        <div class="card settings-card">
+          <div class="card-label">OPENAI</div>
+          <div class="settings-field">
+            <label>API Key</label>
+            <!-- 🔑 ADD YOUR OPENAI API KEY HERE (saved to backend .env, never stored in browser) -->
+            <input type="password" id="cfg-openai" placeholder="sk-..." class="settings-input" />
+          </div>
+          <div class="settings-field">
+            <label>Model</label>
+            <select class="settings-input" id="cfg-model">
+              <option value="gpt-4o">GPT-4o (recommended)</option>
+              <option value="gpt-4o-mini">GPT-4o-mini (cheaper)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <div class="card-label">PERPLEXITY</div>
+          <div class="settings-field">
+            <label>API Key</label>
+            <!-- 🔑 ADD YOUR PERPLEXITY API KEY HERE -->
+            <input type="password" id="cfg-perplexity" placeholder="pplx-..." class="settings-input" />
+          </div>
+          <div class="settings-field">
+            <label>Search Model</label>
+            <select class="settings-input" id="cfg-pplx-model">
+              <option value="sonar-pro">sonar-pro (best)</option>
+              <option value="sonar">sonar (faster)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <div class="card-label">WORDPRESS</div>
+          <div class="settings-field">
+            <label>Site URL</label>
+            <!-- 🔑 YOUR WORDPRESS SITE URL -->
+            <input type="text" id="cfg-wp-url" placeholder="https://yoursite.de" class="settings-input" />
+          </div>
+          <div class="settings-field">
+            <label>Username</label>
+            <input type="text" id="cfg-wp-user" placeholder="admin" class="settings-input" />
+          </div>
+          <div class="settings-field">
+            <label>Application Password</label>
+            <!-- 🔑 WORDPRESS APPLICATION PASSWORD (not your login password) -->
+            <input type="password" id="cfg-wp-pass" placeholder="xxxx xxxx xxxx xxxx" class="settings-input" />
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <div class="card-label">SLACK (OPTIONAL)</div>
+          <div class="settings-field">
+            <label>Webhook URL</label>
+            <!-- 🔑 SLACK INCOMING WEBHOOK URL -->
+            <input type="text" id="cfg-slack" placeholder="https://hooks.slack.com/services/..." class="settings-input" />
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <div class="card-label">GOOGLE SEARCH CONSOLE (OPTIONAL)</div>
+          <div class="settings-field">
+            <label>Service Account JSON</label>
+            <!-- 🔑 PATH TO YOUR GSC SERVICE ACCOUNT JSON -->
+            <input type="text" id="cfg-gsc" placeholder="/path/to/service-account.json" class="settings-input" />
+          </div>
+          <div class="settings-field">
+            <label>Site Property</label>
+            <input type="text" id="cfg-gsc-site" placeholder="sc-domain:yoursite.de" class="settings-input" />
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <div class="card-label">CONTENT SETTINGS</div>
+          <div class="settings-field">
+            <label>Target Language</label>
+            <select class="settings-input" id="cfg-lang">
+              <option value="de">Deutsch (German)</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label>Min. Word Count</label>
+            <input type="number" id="cfg-words" value="1500" class="settings-input" />
+          </div>
+          <div class="settings-field">
+            <label>Post Status</label>
+            <select class="settings-input" id="cfg-status">
+              <option value="draft">Draft (recommended)</option>
+              <option value="publish">Publish immediately</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="settings-save-row">
+        <button class="btn-run" onclick="saveSettings()">
+          <span class="btn-text">Save Configuration</span>
+          <span class="btn-icon">→</span>
+        </button>
+        <button class="btn-secondary" onclick="testConnections()">Test All Connections</button>
+      </div>
+
+      <div class="test-results" id="test-results"></div>
+    </section>
+
+  </main>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
