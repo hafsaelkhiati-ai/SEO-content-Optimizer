@@ -1,122 +1,107 @@
-# 🚀 B2B Lead Agent — VPS Deployment Guide
+# GEO Content Agent — VPS Deployment Guide
 
-Complete step-by-step guide to take this agent live on a Linux VPS (Ubuntu 22.04 recommended).
-
----
-
-## 📁 Project Structure
-
-```
-b2b-lead-agent/
-├── backend/
-│   ├── server.js                  ← Express entry point
-│   ├── package.json
-│   ├── .env.example               ← Copy to .env and fill in keys
-│   ├── routes/
-│   │   ├── leads.js
-│   │   ├── pipeline.js
-│   │   └── stats.js
-│   └── services/
-│       ├── apolloService.js       ← Apollo.io API
-│       ├── clayService.js         ← Clay enrichment API
-│       ├── hubspotService.js      ← HubSpot CRM API
-│       ├── openaiService.js       ← GPT-4o scoring + openers
-│       ├── slackService.js        ← Slack alerts
-│       ├── pipelineOrchestrator.js← Agent brain
-│       └── logger.js
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx                ← Main dashboard UI
-│   │   └── index.js
-│   ├── public/index.html
-│   ├── package.json
-│   └── .env                       ← Set REACT_APP_API_URL here
-├── nginx/
-│   └── leadagent.conf             ← Nginx reverse proxy config
-├── ecosystem.config.js            ← PM2 process config
-└── .gitignore
-```
+> **Stack:** Node.js 18 + Nginx + PM2 · Ubuntu 22.04 LTS  
+> **Time to go live:** ~45 minutes  
+> **Tested on:** Hetzner CX21, DigitalOcean Droplet, Contabo VPS
 
 ---
 
-## 🔑 STEP 1 — Get Your API Keys
+## Table of Contents
 
-Before anything else, collect all keys:
-
-### OpenAI
-1. Go to https://platform.openai.com/api-keys
-2. Click **Create new secret key**
-3. Copy the key → paste into `.env` as `OPENAI_API_KEY`
-
-### HubSpot
-1. In HubSpot: **Settings → Integrations → Private Apps → Create a private app**
-2. Name it "Lead Agent"
-3. Under **Scopes**, enable:
-   - `crm.objects.contacts.write`
-   - `crm.objects.contacts.read`
-   - `crm.objects.companies.write`
-   - `crm.objects.companies.read`
-4. Click **Create App** → copy the access token
-5. Paste into `.env` as `HUBSPOT_ACCESS_TOKEN`
-
-> ⚠️ **IMPORTANT — Create custom HubSpot properties before first run:**
-> In HubSpot → Properties → Create the following Contact properties:
-> - `icp_score` (Number)
-> - `icp_reason` (Single-line text)
-> - `personalised_opener` (Multi-line text)
-> - `linkedin_url` (Single-line text)
-> 
-> And these Company properties:
-> - `icp_score` (Number)
-> - `icp_reason` (Single-line text)
-> - `linkedin_company_page` (Single-line text)
-
-### Apollo.io
-1. Go to https://developer.apollo.io/
-2. Navigate to **API Keys** in your account settings
-3. Generate a new key → paste into `.env` as `APOLLO_API_KEY`
-
-### Clay
-1. Log into https://clay.com
-2. Go to **Settings → API**
-3. Copy your API key → paste into `.env` as `CLAY_API_KEY`
-4. (Optional) Set up a webhook URL and paste as `CLAY_WEBHOOK_URL`
-
-### Slack (optional)
-1. Go to https://api.slack.com/apps → **Create New App**
-2. Choose **From scratch** → name it "Lead Agent Alerts"
-3. Go to **Incoming Webhooks** → toggle **On** → click **Add New Webhook to Workspace**
-4. Pick a channel → copy the webhook URL
-5. Paste into `.env` as `SLACK_WEBHOOK_URL`
+1. [VPS Requirements](#1-vps-requirements)
+2. [Initial Server Setup](#2-initial-server-setup)
+3. [Install Node.js & Dependencies](#3-install-nodejs--dependencies)
+4. [Upload Your Project Files](#4-upload-your-project-files)
+5. [Configure Environment Variables (API Keys)](#5-configure-environment-variables-api-keys)
+6. [Install & Start with PM2](#6-install--start-with-pm2)
+7. [Configure Nginx Reverse Proxy](#7-configure-nginx-reverse-proxy)
+8. [SSL Certificate (HTTPS)](#8-ssl-certificate-https)
+9. [WordPress Application Password Setup](#9-wordpress-application-password-setup)
+10. [Perplexity API Key](#10-perplexity-api-key)
+11. [OpenAI API Key](#11-openai-api-key)
+12. [Slack Webhook (Optional)](#12-slack-webhook-optional)
+13. [Google Search Console (Optional)](#13-google-search-console-optional)
+14. [Test Everything](#14-test-everything)
+15. [Firewall & Security](#15-firewall--security)
+16. [Troubleshooting](#16-troubleshooting)
+17. [Cost Summary](#17-cost-summary)
 
 ---
 
-## 🖥️ STEP 2 — VPS Setup
+## 1. VPS Requirements
 
-SSH into your VPS (Ubuntu 22.04):
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| CPU | 1 vCPU | 2 vCPU |
+| RAM | 1 GB | 2 GB |
+| Disk | 20 GB SSD | 40 GB SSD |
+| OS | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+| Node | 18+ | 20 LTS |
+
+**Recommended providers (DACH-friendly):**
+- **Hetzner** (Germany/Finland) — CX21 = €4.51/mo — best value
+- **DigitalOcean** — Basic Droplet = $6/mo
+- **Contabo** — VPS S = €4.99/mo
+
+---
+
+## 2. Initial Server Setup
+
+SSH into your VPS as root:
 
 ```bash
-ssh root@YOUR_VPS_IP
+ssh root@YOUR_SERVER_IP
 ```
 
-### Install Node.js 20
+Create a non-root user (security best practice):
+
+```bash
+adduser seoagent
+usermod -aG sudo seoagent
+# Copy SSH keys to new user
+rsync --archive --chown=seoagent:seoagent ~/.ssh /home/seoagent
+```
+
+Switch to your new user:
+
+```bash
+su - seoagent
+```
+
+Update the system:
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl git unzip build-essential
+```
+
+---
+
+## 3. Install Node.js & Dependencies
+
+Install Node.js 20 LTS via NodeSource:
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-node --version   # Should print v20.x.x
+sudo apt install -y nodejs
 ```
 
-### Install PM2 (process manager)
+Verify:
+
+```bash
+node --version   # Should show v20.x.x
+npm --version    # Should show 10.x.x
+```
+
+Install PM2 (process manager — keeps your app running):
 
 ```bash
 sudo npm install -g pm2
 ```
 
-### Install Nginx
+Install Nginx:
 
 ```bash
-sudo apt update
 sudo apt install -y nginx
 sudo systemctl enable nginx
 sudo systemctl start nginx
@@ -124,242 +109,544 @@ sudo systemctl start nginx
 
 ---
 
-## 📦 STEP 3 — Upload Your Code
+## 4. Upload Your Project Files
 
-### Option A — Git (recommended)
+**Option A: Clone from Git (recommended)**
 
 ```bash
-# On your VPS:
-cd /var/www
-sudo mkdir leadagent
-sudo chown $USER:$USER leadagent
-cd leadagent
-git init
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
-git pull origin main
+cd /home/seoagent
+git clone https://github.com/YOUR_USERNAME/geo-content-agent.git seo-agent
+cd seo-agent
 ```
 
-### Option B — SCP from your local machine
+**Option B: Upload via SCP (from your local machine)**
 
 ```bash
-# Run this on your LOCAL machine:
-scp -r ./b2b-lead-agent root@YOUR_VPS_IP:/var/www/leadagent
+# Run this on YOUR LOCAL MACHINE, not the server:
+scp -r /path/to/seo-agent seoagent@YOUR_SERVER_IP:/home/seoagent/
+```
+
+**Option C: Upload via SFTP**  
+Use FileZilla or Cyberduck to drag and drop the project folder.
+
+---
+
+Install backend Node.js dependencies:
+
+```bash
+cd /home/seoagent/seo-agent/backend
+npm install
 ```
 
 ---
 
-## ⚙️ STEP 4 — Configure Environment
+## 5. Configure Environment Variables (API Keys)
+
+This is where you add all your API keys. They live in a `.env` file that is **never uploaded to Git**.
 
 ```bash
-cd /var/www/leadagent/backend
+cd /home/seoagent/seo-agent/backend
 cp .env.example .env
 nano .env
 ```
 
-Fill in every value. The file looks like this — replace all `REPLACE_WITH_...` values:
+Fill in each value (see sections 9–13 below for where to get each key):
 
 ```env
-PORT=4000
-NODE_ENV=production
-OPENAI_API_KEY=sk-...
-HUBSPOT_ACCESS_TOKEN=pat-...
-APOLLO_API_KEY=...
-CLAY_API_KEY=...
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-ICP_INDUSTRIES=SaaS,Manufacturing,Chemical
-ICP_LOCATIONS=Germany,Austria,Switzerland
-ICP_MIN_EMPLOYEES=50
-ICP_MAX_EMPLOYEES=5000
+# ─── SERVER ─────────────────────────────────────────
+PORT=3000
+FRONTEND_URL=https://yourdomain.de
+
+# ─── OPENAI ─────────────────────────────────────────
+# 🔑 Get from: https://platform.openai.com/api-keys
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxx
+OPENAI_MODEL=gpt-4o
+
+# ─── PERPLEXITY ─────────────────────────────────────
+# 🔑 Get from: https://www.perplexity.ai/settings/api
+PERPLEXITY_API_KEY=pplx-xxxxxxxxxxxxxxxxxxxx
+PERPLEXITY_MODEL=sonar-pro
+
+# ─── WORDPRESS ──────────────────────────────────────
+# 🔑 Your live WordPress site URL (no trailing slash)
+WORDPRESS_URL=https://yoursite.de
+WORDPRESS_USERNAME=admin
+# 🔑 Application Password from WP Admin → Users → Profile
+WORDPRESS_APP_PASSWORD=AbCd EfGh IjKl MnOp QrSt UvWx
+
+# ─── SLACK (optional) ────────────────────────────────
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
+
+# ─── GOOGLE SEARCH CONSOLE (optional) ───────────────
+GSC_CREDENTIALS_PATH=/home/seoagent/seo-agent/gsc-service-account.json
+GSC_SITE_URL=sc-domain:yoursite.de
+
+# ─── CONTENT SETTINGS ───────────────────────────────
+CONTENT_LANGUAGE=de
+MIN_WORD_COUNT=1500
+WP_POST_STATUS=draft
+DEFAULT_CATEGORY_ID=1
 ```
 
-Save with `Ctrl+O`, exit with `Ctrl+X`.
+Save with `Ctrl+O`, then `Ctrl+X`.
+
+**Protect the file:**
+
+```bash
+chmod 600 /home/seoagent/seo-agent/backend/.env
+```
 
 ---
 
-## 📥 STEP 5 — Install Dependencies
+## 6. Install & Start with PM2
+
+Start the backend:
 
 ```bash
-# Backend
-cd /var/www/leadagent/backend
-npm install
+cd /home/seoagent/seo-agent/backend
+pm2 start server.js --name "geo-agent-backend"
+```
 
-# Create logs directory (required by logger)
-mkdir -p /var/www/leadagent/logs
+Save PM2 config so it restarts on server reboot:
 
-# Frontend
-cd /var/www/leadagent/frontend
-npm install
+```bash
+pm2 save
+pm2 startup
+# Copy and run the command it outputs (starts with: sudo env PATH=...)
+```
+
+Useful PM2 commands:
+
+```bash
+pm2 status              # Check if running
+pm2 logs geo-agent-backend   # View live logs
+pm2 restart geo-agent-backend  # Restart after changes
+pm2 stop geo-agent-backend     # Stop
+```
+
+**Quick test** — the backend should respond:
+
+```bash
+curl http://localhost:3000/health
+# Expected: {"status":"ok","timestamp":"..."}
 ```
 
 ---
 
-## 🏗️ STEP 6 — Build Frontend
+## 7. Configure Nginx Reverse Proxy
+
+Nginx will:
+- Serve the frontend HTML/CSS/JS files
+- Proxy `/api/*` requests to the Node.js backend on port 3000
+- Handle HTTPS/SSL
+
+Create an Nginx config file:
 
 ```bash
-cd /var/www/leadagent/frontend
-
-# ⚠️  Set your domain or VPS IP first:
-echo "REACT_APP_API_URL=http://YOUR_VPS_IP_OR_DOMAIN/api" > .env
-
-npm run build
+sudo nano /etc/nginx/sites-available/geo-agent
 ```
 
-This creates `frontend/build/` — that's what Nginx will serve.
+Paste this configuration:
 
----
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.de www.yourdomain.de;
 
-## 🌐 STEP 7 — Configure Nginx
+    # ─── Frontend (static files) ──────────────────────────
+    root /home/seoagent/seo-agent/frontend;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # ─── Backend API (proxy to Node.js port 3000) ─────────
+    location /api/ {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        
+        # Required for SSE (Server-Sent Events) streaming
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding on;
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Increase timeouts for long AI generation requests
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+    }
+
+    # ─── Security headers ─────────────────────────────────
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header Referrer-Policy "strict-origin-when-cross-origin";
+}
+```
+
+Enable the site:
 
 ```bash
-# Copy the nginx config
-sudo cp /var/www/leadagent/nginx/leadagent.conf /etc/nginx/sites-available/leadagent
-
-# Edit the server_name line to match your domain or IP
-sudo nano /etc/nginx/sites-available/leadagent
-# Change:  server_name yourdomain.com;
-# To:      server_name YOUR_VPS_IP;  (or your actual domain)
-
-# Also update the frontend root path:
-# Change: root /var/www/leadagent/frontend;
-# To:     root /var/www/leadagent/frontend/build;
-
-# Enable the site
-sudo ln -s /etc/nginx/sites-available/leadagent /etc/nginx/sites-enabled/
-
-# Remove default site
-sudo rm -f /etc/nginx/sites-enabled/default
-
-# Test config
-sudo nginx -t
-
-# Reload
+sudo ln -s /etc/nginx/sites-available/geo-agent /etc/nginx/sites-enabled/
+sudo nginx -t        # Test config — should say "syntax is ok"
 sudo systemctl reload nginx
 ```
 
----
-
-## ▶️ STEP 8 — Start the Backend with PM2
-
-```bash
-cd /var/www/leadagent
-
-# ⚠️  Edit ecosystem.config.js first — update the cwd path if needed
-nano ecosystem.config.js
-# Change: cwd: "/var/www/leadagent"   ← should already match
-
-# Start the backend
-pm2 start ecosystem.config.js
-
-# Check it's running
-pm2 status
-pm2 logs leadagent-backend --lines 20
-
-# Make PM2 restart on server reboot
-pm2 save
-pm2 startup
-# → Run the command it prints out
-```
+Point your domain's DNS A record to your server's IP address.  
+(At Hetzner/DigitalOcean: DNS panel → A record → @ → YOUR_SERVER_IP)
 
 ---
 
-## ✅ STEP 9 — Verify Everything Works
+## 8. SSL Certificate (HTTPS)
 
-```bash
-# 1. Check backend health
-curl http://localhost:4000/health
-# Expected: {"status":"ok","timestamp":"..."}
-
-# 2. Check API via Nginx
-curl http://YOUR_VPS_IP/api/stats
-# Expected: {"totalLeadsInCRM":0,"avgIcpScore":0,"lastRun":null}
-
-# 3. Open dashboard in browser
-# Go to: http://YOUR_VPS_IP
-```
-
----
-
-## 🔒 STEP 10 — Add HTTPS (Free with Let's Encrypt)
-
-Only do this if you have a real domain pointing to your VPS:
+Install Certbot:
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
-# Follow the prompts
-# Certbot will auto-update your nginx config for SSL
+```
 
-# Test auto-renewal
+Get a free Let's Encrypt certificate:
+
+```bash
+sudo certbot --nginx -d yourdomain.de -d www.yourdomain.de
+```
+
+Follow the prompts (enter your email, agree to terms).
+
+Certbot auto-renews every 90 days. Test renewal:
+
+```bash
 sudo certbot renew --dry-run
+```
+
+After SSL, update your `.env`:
+
+```bash
+nano /home/seoagent/seo-agent/backend/.env
+# Change FRONTEND_URL to https://yourdomain.de
+```
+
+And update `app.js` in the frontend:
+
+```javascript
+// In frontend/app.js, line 1:
+const API_BASE = 'https://yourdomain.de';
+```
+
+Restart PM2:
+
+```bash
+pm2 restart geo-agent-backend
 ```
 
 ---
 
-## 🔁 Updating the App
+## 9. WordPress Application Password Setup
 
-When you push code changes:
+WordPress Application Passwords are a secure way to authenticate with the REST API — they are separate from your admin login password.
+
+**Steps:**
+
+1. Log into your WordPress admin: `yoursite.de/wp-admin`
+2. Go to **Users → Your Profile** (or **Users → All Users → Edit your user**)
+3. Scroll down to **Application Passwords**
+4. In the "New Application Password Name" field, type: `GEO Content Agent`
+5. Click **Add New Application Password**
+6. **Copy the generated password immediately** — it looks like: `AbCd EfGh IjKl MnOp QrSt UvWx`
+7. Paste it into your `.env` as `WORDPRESS_APP_PASSWORD`
+
+> ⚠️ The password includes spaces — that's correct, keep them in.
+
+**Enable REST API (if needed):**  
+Most WordPress installations have REST API enabled by default. If it doesn't work, check:
+- WP Admin → Settings → Permalinks → Save (just click Save to flush rewrite rules)
+- Disable any "Disable REST API" security plugins temporarily
+
+**Get your Category IDs:**
 
 ```bash
-cd /var/www/leadagent
-git pull origin main
+curl -s https://yoursite.de/wp-json/wp/v2/categories | python3 -m json.tool | grep -E '"id"|"name"'
+```
 
-# If backend changed:
-cd backend && npm install
-pm2 restart leadagent-backend
+Set `DEFAULT_CATEGORY_ID` in `.env` to the ID of your blog category.
 
-# If frontend changed:
-cd ../frontend
-npm run build
+---
+
+## 10. Perplexity API Key
+
+Perplexity is used for real-time SERP research.
+
+**Steps:**
+
+1. Go to: https://www.perplexity.ai/settings/api
+2. Sign in or create an account
+3. Click **Generate** to create a new API key
+4. Copy the key (starts with `pplx-`)
+5. Add to `.env`: `PERPLEXITY_API_KEY=pplx-your-key-here`
+
+**Pricing:**
+- sonar-pro: ~$3 per 1,000 requests  
+- At 100 articles/month = ~$0.30 total for SERP research
+
+**Recommended model:**  
+Use `sonar-pro` for better SERP research. Switch to `sonar` to reduce costs.
+
+---
+
+## 11. OpenAI API Key
+
+OpenAI GPT-4o is used for gap analysis, outline, and article writing.
+
+**Steps:**
+
+1. Go to: https://platform.openai.com/api-keys
+2. Click **Create new secret key**
+3. Name it: `GEO Content Agent`
+4. Copy the key (starts with `sk-proj-` or `sk-`)
+5. Add to `.env`: `OPENAI_API_KEY=sk-your-key-here`
+
+**Set a spending limit** to avoid surprise bills:
+
+1. Go to: https://platform.openai.com/account/billing/limits
+2. Set a monthly limit (e.g. $20/month is plenty)
+
+**Pricing for GPT-4o (as of 2025):**
+- ~$0.01–0.03 per article (input + output tokens combined)
+- 100 articles/month ≈ $2–3
+
+---
+
+## 12. Slack Webhook (Optional)
+
+Get notified in Slack when a new article draft is ready.
+
+**Steps:**
+
+1. Go to: https://api.slack.com/apps
+2. Click **Create New App → From scratch**
+3. Name: `GEO Content Agent`, select your workspace
+4. Click **Incoming Webhooks → Activate Incoming Webhooks** → toggle On
+5. Click **Add New Webhook to Workspace**
+6. Select the channel (e.g. `#content` or `#seo`)
+7. Copy the Webhook URL (starts with `https://hooks.slack.com/services/`)
+8. Add to `.env`: `SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...`
+
+---
+
+## 13. Google Search Console (Optional)
+
+GSC integration lets the agent check if a keyword already has rankings before writing.
+
+**Steps:**
+
+1. Go to: https://console.cloud.google.com
+2. Create a new project (or use existing)
+3. Enable the **Search Console API**:
+   - APIs & Services → Enable APIs → search "Search Console API" → Enable
+4. Create a Service Account:
+   - IAM & Admin → Service Accounts → Create Service Account
+   - Name: `geo-content-agent`
+   - Role: leave blank (we set permissions in GSC directly)
+   - Click Done
+5. Click on the service account → Keys → Add Key → JSON
+6. Download the JSON file
+7. Upload it to your VPS:
+
+```bash
+# From your local machine:
+scp gsc-service-account.json seoagent@YOUR_SERVER_IP:/home/seoagent/seo-agent/
+```
+
+8. In Google Search Console (search.google.com/search-console):
+   - Go to Settings → Users and permissions → Add user
+   - Enter the service account email (looks like `geo-content-agent@project-id.iam.gserviceaccount.com`)
+   - Permission: Restricted
+
+9. Update `.env`:
+
+```env
+GSC_CREDENTIALS_PATH=/home/seoagent/seo-agent/gsc-service-account.json
+GSC_SITE_URL=sc-domain:yoursite.de
+```
+
+---
+
+## 14. Test Everything
+
+**1. Backend health check:**
+
+```bash
+curl https://yourdomain.de/health
+```
+
+**2. Test API connections via the UI:**
+
+- Open `https://yourdomain.de`
+- Click **Settings**
+- Fill in your credentials
+- Click **Test All Connections**
+
+**3. Test a full article generation:**
+
+- Click **Generate**
+- Enter a keyword: `GEO Optimierung für Agenturen`
+- Uncheck "Auto-publish" for your first test
+- Click **Run Agent**
+- Watch the pipeline stages complete
+- Review the generated outline, gaps, and draft
+
+**4. Check PM2 logs for errors:**
+
+```bash
+pm2 logs geo-agent-backend --lines 50
+```
+
+---
+
+## 15. Firewall & Security
+
+Set up UFW firewall:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
+sudo ufw status
+```
+
+Port 3000 (Node.js) should NOT be publicly accessible — only Nginx should proxy to it:
+
+```bash
+# Verify port 3000 is only accessible locally
+sudo ufw deny 3000
+```
+
+**Optional: Add HTTP Basic Auth to protect the dashboard** (if it's a private tool):
+
+```bash
+sudo apt install -y apache2-utils
+sudo htpasswd -c /etc/nginx/.htpasswd yourusername
+```
+
+Add to your Nginx config:
+
+```nginx
+location / {
+    auth_basic "GEO Agent";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+    try_files $uri $uri/ /index.html;
+}
+```
+
+Then reload Nginx:
+
+```bash
 sudo systemctl reload nginx
 ```
 
 ---
 
-## 🗓️ Scheduled Pipeline (Cron)
+## 16. Troubleshooting
 
-The backend already includes a built-in cron job in `server.js`:
+**Backend not starting:**
 
-```js
-// Runs every weekday at 08:00 server time
-cron.schedule("0 8 * * 1-5", async () => { ... });
+```bash
+pm2 logs geo-agent-backend
+# Look for "Error: Cannot find module" → run: npm install
+# Look for "EADDRINUSE" → another process using port 3000: kill it with: fuser -k 3000/tcp
 ```
 
-To change the schedule, edit this line in `backend/server.js` using standard cron syntax:
-- `"0 8 * * 1-5"` = Monday–Friday at 08:00
-- `"0 9,14 * * *"` = Every day at 09:00 and 14:00
-- `"0 */4 * * *"` = Every 4 hours
+**Nginx 502 Bad Gateway:**
 
-After editing, restart: `pm2 restart leadagent-backend`
+```bash
+# Is the Node.js backend actually running?
+pm2 status
+curl http://localhost:3000/health
+
+# Check Nginx error log:
+sudo tail -f /var/log/nginx/error.log
+```
+
+**WordPress 401 Unauthorized:**
+
+```bash
+# Test directly:
+curl -u "admin:AbCd EfGh IjKl MnOp" https://yoursite.de/wp-json/wp/v2/users/me
+# If 401: regenerate Application Password in WP Admin
+# If 404: verify WordPress URL is correct
+```
+
+**SSE streaming not working (progress bar stuck):**
+
+Check Nginx config has `proxy_buffering off;` in the `/api/` location block. This is required for Server-Sent Events.
+
+**Perplexity returns empty SERP data:**
+
+```bash
+# Test the API key directly:
+curl -X POST https://api.perplexity.ai/chat/completions \
+  -H "Authorization: Bearer pplx-YOUR-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"sonar","messages":[{"role":"user","content":"Hello"}],"max_tokens":10}'
+```
+
+**OpenAI rate limit errors:**
+
+Switch to `gpt-4o-mini` in Settings for cheaper, faster generation. Update `OPENAI_MODEL=gpt-4o-mini` in `.env` and restart PM2.
+
+**After any `.env` change:**
+
+```bash
+pm2 restart geo-agent-backend
+```
 
 ---
 
-## 🐛 Troubleshooting
+## 17. Cost Summary
 
-| Problem | Fix |
-|---|---|
-| Backend not starting | `pm2 logs leadagent-backend` — check for missing .env keys |
-| Frontend shows blank page | Check `REACT_APP_API_URL` in frontend/.env, rebuild |
-| HubSpot push fails | Verify custom properties exist in HubSpot (see Step 1) |
-| Apollo returns 0 results | Check API key, confirm your plan includes people search |
-| Clay enrichment fails | Check CLAY_API_KEY, or set it to empty — enrichment is non-blocking |
-| Nginx 502 Bad Gateway | Backend is down — run `pm2 restart leadagent-backend` |
-| Port 4000 in use | Change `PORT=4001` in .env and update ecosystem.config.js |
-
----
-
-## 💰 Monthly Cost Estimate
-
-| Service | Plan | Cost |
-|---|---|---|
-| Clay | Starter | ~$149/mo |
-| Apollo.io | Basic | ~$49/mo |
-| HubSpot | Free CRM | $0 |
-| OpenAI | Pay-per-use | ~$5/mo |
-| VPS (Hetzner/DigitalOcean) | 2GB RAM | ~$6/mo |
-| **Total** | | **~$209/mo** |
+| Service | Cost | Notes |
+|---------|------|-------|
+| Hetzner VPS CX21 | €4.51/mo | Runs everything |
+| OpenAI GPT-4o | ~$0.02/article | 100 articles = ~$2/mo |
+| Perplexity sonar-pro | ~$0.005/article | 100 articles = ~$0.50/mo |
+| WordPress hosting | Existing | Use your current WP host |
+| SSL (Let's Encrypt) | Free | Auto-renewed |
+| **Total for 100 articles/mo** | **~€7/mo** | |
 
 ---
 
-## 📋 Resume Bullet (copy exactly)
+## Deployment Checklist
 
-> Developed a Clay + HubSpot API lead research agent that automatically scores B2B prospects by ICP fit and creates enriched CRM entries — removing manual data entry from the prospecting workflow.
+```
+[ ] VPS provisioned & SSH access working
+[ ] Node.js 20 installed
+[ ] PM2 installed globally
+[ ] Nginx installed
+[ ] Project files uploaded to /home/seoagent/seo-agent/
+[ ] npm install run in backend/
+[ ] .env created from .env.example
+[ ] OPENAI_API_KEY added to .env
+[ ] PERPLEXITY_API_KEY added to .env
+[ ] WORDPRESS_URL, USERNAME, APP_PASSWORD added to .env
+[ ] Slack webhook added (optional)
+[ ] GSC service account configured (optional)
+[ ] PM2 started: pm2 start server.js --name geo-agent-backend
+[ ] PM2 startup configured: pm2 startup && pm2 save
+[ ] Nginx config created and enabled
+[ ] Domain DNS A record pointing to server IP
+[ ] SSL certificate issued via certbot
+[ ] Firewall enabled (UFW)
+[ ] Health check passing: curl https://yourdomain.de/health
+[ ] Test article generated successfully
+[ ] WordPress draft visible in WP Admin
+```
+
+---
+
+*Built with n8n workflow logic adapted into Node.js for direct VPS deployment.*  
+*Compatible with any WordPress site — self-hosted or managed hosting.*
