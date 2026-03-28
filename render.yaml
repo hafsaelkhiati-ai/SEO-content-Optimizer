@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: seo-content-optimizer
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: PERPLEXITY_API_KEY
+        sync: false
+      - key: PERPLEXITY_MODEL
+        value: sonar-pro
+      - key: WORDPRESS_URL
+        sync: false
+      - key: WORDPRESS_USERNAME
+        sync: false
+      - key: WORDPRESS_APP_PASSWORD
+        sync: false
+      - key: CONTENT_LANGUAGE
+        value: de
+      - key: MIN_WORD_COUNT
+        value: "1500"
+      - key: WP_POST_STATUS
+        value: draft
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+      - key: GSC_SITE_URL
+        sync: false
+      - key: GSC_CREDENTIALS_JSON
+        sync: false
