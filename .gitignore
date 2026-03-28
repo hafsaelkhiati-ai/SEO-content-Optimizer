@@ -1,0 +1,25 @@
+# Environment & secrets — NEVER commit these
+.env
+backend/.env
+*.env
+gsc-service-account.json
+*.json.key
+
+# Generated settings (contains your WP URL etc.)
+backend/settings.json
+
+# Node modules
+node_modules/
+backend/node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
